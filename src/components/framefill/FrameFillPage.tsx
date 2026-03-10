@@ -57,9 +57,9 @@ export function FrameFillPage() {
     <div className="max-w-6xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">镂空填充</h1>
+        <h1 className="text-2xl font-bold text-slate-800">钥匙扣定制</h1>
         <p className="text-slate-500 mt-1">
-          上传透明PNG模板，为每个镂空区域填充图片
+          上传照片，合成钥匙扣效果图，打印后可制作个性挂件
         </p>
       </div>
 
@@ -225,12 +225,12 @@ export function FrameFillPage() {
         <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
           <h4 className="text-sm font-medium text-blue-800 mb-2">使用提示</h4>
           <ul className="text-xs text-blue-700 space-y-1">
-            <li>1. 上传一张带透明区域的 PNG 模板图片</li>
+            <li>1. 选择一个钥匙扣模板（带透明区域的 PNG 图片）</li>
             <li>2. 系统会自动检测所有透明镂空区域</li>
-            <li>3. 上传多张填充图片</li>
-            <li>4. 为每个镂空区域选择一张图片</li>
-            <li>5. 在画布中拖拽调整图片位置，滚轮缩放大小</li>
-            <li>6. 预览并导出最终合成图</li>
+            <li>3. 上传要填充的照片</li>
+            <li>4. 为每个镂空区域选择一张照片</li>
+            <li>5. 拖拽调整照片位置，滚轮缩放大小</li>
+            <li>6. 预览效果，导出图片后打印即可制作钥匙扣</li>
           </ul>
         </div>
       )}

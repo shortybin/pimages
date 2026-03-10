@@ -97,18 +97,16 @@ export const features: Feature[] = [
   },
   {
     id: 'framefill',
-    name: '镂空填充',
-    description: '为透明模板的镂空区域交互式填充图片',
+    name: '钥匙扣定制',
+    description: '上传照片合成钥匙扣效果图，可打印制作个性挂件',
     path: '/framefill',
     color: 'from-fuchsia-500 to-pink-600',
     isNew: true,
     icon: (
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-        <rect x="7" y="7" width="3" height="3" fill="currentColor" stroke="none" />
-        <rect x="14" y="7" width="3" height="3" fill="currentColor" stroke="none" />
-        <rect x="7" y="14" width="3" height="3" fill="currentColor" stroke="none" />
-        <rect x="14" y="14" width="3" height="3" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="8" r="5" />
+        <path d="M12 13v8" />
+        <path d="M9 18l3 3 3-3" />
       </svg>
     ),
   },
