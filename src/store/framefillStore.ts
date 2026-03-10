@@ -11,7 +11,6 @@ import {
   loadImage,
   getImageData,
   readFileAsImage,
-  dataUrlToBlob,
 } from '../services/templateProcessor'
 
 interface FrameFillStore {
