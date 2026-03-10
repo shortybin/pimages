@@ -34,3 +34,4 @@ jobs:
           TARGET: ${{ secrets.DEPLOY_PATH }}
           SOURCE: "dist/"
           ARGS: "-avz --delete"
+          EXCLUDE: ".user.ini,*.log,.htaccess"
