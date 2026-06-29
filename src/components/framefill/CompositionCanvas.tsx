@@ -13,8 +13,6 @@ interface DragState {
   startY: number
   startConfig: RegionPhotoConfig
   mode: 'move' | 'resize'
-  baseWidth?: number
-  baseHeight?: number
   anchorX?: number
   anchorY?: number
 }
@@ -157,20 +155,7 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
     const photo = photos.find((p) => p.id === region.photoId)
     if (!photo || !loadedPhotos.has(photo.id)) return
 
-    const photoImg = loadedPhotos.get(photo.id)!
     const config = photoConfigs[regionId] || { offsetX: 0, offsetY: 0, scale: 1 }
-
-    // cover 基准尺寸（scale=1 时）
-    const photoRatio = photoImg.width / photoImg.height
-    const regionRatio = region.width / region.height
-    let baseWidth: number, baseHeight: number
-    if (photoRatio > regionRatio) {
-      baseHeight = region.height
-      baseWidth = baseHeight * photoRatio
-    } else {
-      baseWidth = region.width
-      baseHeight = baseWidth / photoRatio
-    }
 
     // 对角锚点：拖动某角时，其对角点作为缩放参考原点
     const anchorX = corner.startsWith('w') ? region.x + region.width : region.x
@@ -184,8 +169,6 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
       startY: y,
       startConfig: { ...config },
       mode: 'resize',
-      baseWidth,
-      baseHeight,
       anchorX,
       anchorY,
     })
@@ -199,19 +182,18 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
 
     if (dragState.mode === 'resize') {
       // 锁定宽高比：以被拖角的对角点为锚，按鼠标到锚点的距离比换算缩放
-      if (
-        dragState.baseWidth == null ||
-        dragState.baseHeight == null ||
-        dragState.anchorX == null ||
-        dragState.anchorY == null
-      )
-        return
+      if (dragState.anchorX == null || dragState.anchorY == null) return
+
+      const region = template?.regions.find((r) => r.id === dragState.regionId)
+      const photo = region ? photos.find((p) => p.id === region.photoId) : undefined
+      if (!region || !photo) return
 
       const startDist = Math.hypot(dragState.startX - dragState.anchorX, dragState.startY - dragState.anchorY) || 1
       const curDist = Math.hypot(x - dragState.anchorX, y - dragState.anchorY)
       const ratio = curDist / startDist
 
-      const newScale = Math.max(0.3, Math.min(5, dragState.startConfig.scale * ratio))
+      // 按原图等比缩放，下限 0.1，上限 10
+      const newScale = Math.max(0.1, Math.min(10, dragState.startConfig.scale * ratio))
       updatePhotoConfig(dragState.regionId, { scale: newScale })
       return
     }
@@ -270,7 +252,7 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        {/* Photo layers (bottom) - with clipping */}
+        {/* Photo layers (bottom) - 用 clip-path 按区域精确裁切，互不覆盖 */}
         {template.regions.map((region) => {
           const photo = getPhotoForRegion(region)
           if (!photo) return null
@@ -279,30 +261,43 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
           const drawParams = calculatePhotoDrawParams(region, photo, config)
           if (!drawParams) return null
 
+          // 照片绝对定位(模板坐标)
+          const imgLeft = drawParams.dx * scale
+          const imgTop = drawParams.dy * scale
+          const imgW = drawParams.dw * scale
+          const imgH = drawParams.dh * scale
+
+          // 区域矩形(画布坐标)
+          const regLeft = region.x * scale
+          const regTop = region.y * scale
+          const regW = region.width * scale
+          const regH = region.height * scale
+
+          // 计算区域在 img 边框盒内的裁切比例(0~1)，防护除零
+          const cl = imgW > 0 ? Math.max(0, Math.min(1, (regLeft - imgLeft) / imgW)) : 0
+          const cr = imgW > 0 ? Math.max(0, Math.min(1, (regLeft + regW - imgLeft) / imgW)) : 1
+          const ct = imgH > 0 ? Math.max(0, Math.min(1, (regTop - imgTop) / imgH)) : 0
+          const cb = imgH > 0 ? Math.max(0, Math.min(1, (regTop + regH - imgTop) / imgH)) : 1
+          // inset(上 右 下 左) 用百分比
+          const clipTop = (ct * 100).toFixed(4)
+          const clipRight = ((1 - cr) * 100).toFixed(4)
+          const clipBottom = ((1 - cb) * 100).toFixed(4)
+          const clipLeft = (cl * 100).toFixed(4)
+
           return (
-            <div
-              key={`photo-container-${region.id}`}
-              className="absolute overflow-hidden pointer-events-none"
+            <img
+              key={`photo-${region.id}`}
+              src={photo.dataUrl}
+              alt=""
+              className="absolute pointer-events-none"
               style={{
-                left: region.x * scale,
-                top: region.y * scale,
-                width: region.width * scale,
-                height: region.height * scale,
+                left: imgLeft,
+                top: imgTop,
+                width: imgW,
+                height: imgH,
+                clipPath: `inset(${clipTop}% ${clipRight}% ${clipBottom}% ${clipLeft}%)`,
               }}
-            >
-              <img
-                src={photo.dataUrl}
-                alt=""
-                className="absolute"
-                style={{
-                  left: (drawParams.dx - region.x) * scale,
-                  top: (drawParams.dy - region.y) * scale,
-                  width: drawParams.dw * scale,
-                  height: drawParams.dh * scale,
-                  objectFit: 'fill',
-                }}
-              />
-            </div>
+            />
           )
         })}
 
@@ -395,12 +390,13 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
         })}
       </div>
 
-      {/* 刻度尺：显示照片在模板坐标系下的实际渲染尺寸（原始像素） */}
+      {/* 刻度尺：相对满屏的缩放比例 + 实际渲染尺寸 */}
       {selectedRegionId &&
         (() => {
           const region = template.regions.find((r) => r.id === selectedRegionId)
           const photo = region ? getPhotoForRegion(region) : undefined
           const config = photoConfigs[selectedRegionId] || { offsetX: 0, offsetY: 0, scale: 1 }
+          const zoomPct = Math.round(config.scale * 100)
           let photoW = 0,
             photoH = 0
           if (region && photo && loadedPhotos.has(photo.id)) {
@@ -413,20 +409,20 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
             <div className="mt-3 flex flex-col items-center gap-1.5 text-xs text-slate-500">
               <div className="flex items-center gap-4 font-mono tabular-nums">
                 <span className="flex items-center gap-1">
-                  <span className="text-slate-400">宽</span>
-                  <span className="text-slate-700 font-medium">{photoW}</span>
-                  <span className="text-slate-400">px</span>
+                  <span className="text-slate-400">缩放</span>
+                  <span className="text-slate-700 font-medium">{zoomPct}</span>
+                  <span className="text-slate-400">%</span>
                 </span>
-                <span className="text-slate-300">×</span>
+                <span className="text-slate-300">·</span>
                 <span className="flex items-center gap-1">
-                  <span className="text-slate-400">高</span>
-                  <span className="text-slate-700 font-medium">{photoH}</span>
+                  <span className="text-slate-400">尺寸</span>
+                  <span className="text-slate-700 font-medium">{photoW}×{photoH}</span>
                   <span className="text-slate-400">px</span>
                 </span>
               </div>
               {region && (
                 <div className="text-[11px] text-slate-400">
-                  区域 {Math.round(region.width)}×{Math.round(region.height)} px · 缩放 {Math.round(config.scale * 100)}%
+                  区域 {Math.round(region.width)}×{Math.round(region.height)} px
                 </div>
               )}
             </div>

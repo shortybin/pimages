@@ -232,7 +232,7 @@ export const useFrameFillStore = create<FrameFillStore>((set, get) => ({
         region.id === regionId ? { ...region, photoId } : region
       )
 
-      // Reset photo config when assigning new photo
+      // 分配新照片时使用默认 scale:1（照片原始大小）
       const newPhotoConfigs = { ...state.photoConfigs }
       if (photoId) {
         newPhotoConfigs[regionId] = { ...defaultPhotoConfig }
