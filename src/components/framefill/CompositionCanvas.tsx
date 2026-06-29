@@ -184,18 +184,32 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
   }
 
   // Handle wheel for scaling
-  const handleWheel = (e: React.WheelEvent) => {
-    if (!selectedRegionId) return
+  const handleWheel = useCallback(
+    (e: WheelEvent) => {
+      if (!selectedRegionId) return
 
-    e.preventDefault()
-    const config = photoConfigs[selectedRegionId] || { offsetX: 0, offsetY: 0, scale: 1 }
+      e.preventDefault()
+      const config = photoConfigs[selectedRegionId] || { offsetX: 0, offsetY: 0, scale: 1 }
 
-    // Scale by 0.1 per wheel tick
-    const delta = e.deltaY > 0 ? -0.1 : 0.1
-    const newScale = Math.max(0.5, Math.min(3, config.scale + delta))
+      // Scale by 0.1 per wheel tick
+      const delta = e.deltaY > 0 ? -0.1 : 0.1
+      const newScale = Math.max(0.5, Math.min(3, config.scale + delta))
 
-    updatePhotoConfig(selectedRegionId, { scale: newScale })
-  }
+      updatePhotoConfig(selectedRegionId, { scale: newScale })
+    },
+    [selectedRegionId, photoConfigs, updatePhotoConfig]
+  )
+
+  // Add non-passive wheel listener to prevent page scroll
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    container.addEventListener('wheel', handleWheel, { passive: false })
+    return () => {
+      container.removeEventListener('wheel', handleWheel)
+    }
+  }, [handleWheel])
 
   // Handle click on canvas to deselect
   const handleCanvasClick = (e: React.MouseEvent) => {
@@ -235,7 +249,6 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
       >
         {/* Photo layers (bottom) - with clipping */}
         {template.regions.map((region) => {
