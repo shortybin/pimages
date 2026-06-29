@@ -12,6 +12,7 @@ import {
   getImageData,
   readFileAsImage,
 } from '../services/templateProcessor'
+import { calculatePhotoPlacement } from '../services/photoPlacement'
 
 interface FrameFillStore {
   // Core state
@@ -292,31 +293,15 @@ export const useFrameFillStore = create<FrameFillStore>((set, get) => ({
       ctx.rect(region.x, region.y, region.width, region.height)
       ctx.clip()
 
-      // Calculate base fit (cover mode)
-      const photoRatio = photoImg.width / photoImg.height
-      const regionRatio = region.width / region.height
+      // 复用与预览一致的位置计算（cover + 等比缩放）
+      const { dx, dy, dw, dh } = calculatePhotoPlacement(
+        region,
+        photoImg.width,
+        photoImg.height,
+        config
+      )
 
-      let baseWidth: number, baseHeight: number
-      if (photoRatio > regionRatio) {
-        baseHeight = region.height
-        baseWidth = baseHeight * photoRatio
-      } else {
-        baseWidth = region.width
-        baseHeight = baseWidth / photoRatio
-      }
-
-      // Apply scale and offset
-      const scaledWidth = baseWidth * config.scale
-      const scaledHeight = baseHeight * config.scale
-
-      // Center position with offset
-      const baseX = region.x + (region.width - baseWidth) / 2
-      const baseY = region.y + (region.height - baseHeight) / 2
-
-      const dx = baseX - (scaledWidth - baseWidth) / 2 + config.offsetX
-      const dy = baseY - (scaledHeight - baseHeight) / 2 + config.offsetY
-
-      ctx.drawImage(photoImg, dx, dy, scaledWidth, scaledHeight)
+      ctx.drawImage(photoImg, dx, dy, dw, dh)
       ctx.restore()
     }
 

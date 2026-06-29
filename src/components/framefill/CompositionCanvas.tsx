@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
 import { useFrameFillStore } from '../../store/framefillStore'
 import type { FillRegion, RegionPhotoConfig, FillPhoto } from '../../types/framefill'
+import { calculatePhotoPlacement } from '../../services/photoPlacement'
 
 interface CompositionCanvasProps {
   maxDisplaySize?: number
@@ -11,6 +12,11 @@ interface DragState {
   startX: number
   startY: number
   startConfig: RegionPhotoConfig
+  mode: 'move' | 'resize'
+  baseWidth?: number
+  baseHeight?: number
+  anchorX?: number
+  anchorY?: number
 }
 
 export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasProps) {
@@ -112,37 +118,8 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
     if (!loadedPhotos.has(photo.id)) return null
 
     const photoImg = loadedPhotos.get(photo.id)!
-    const photoRatio = photoImg.width / photoImg.height
-    const regionRatio = region.width / region.height
-
-    // Calculate base fit (cover mode)
-    let baseWidth: number, baseHeight: number
-    if (photoRatio > regionRatio) {
-      baseHeight = region.height
-      baseWidth = baseHeight * photoRatio
-    } else {
-      baseWidth = region.width
-      baseHeight = baseWidth / photoRatio
-    }
-
-    // Apply scale
-    const scaledWidth = baseWidth * config.scale
-    const scaledHeight = baseHeight * config.scale
-
-    // Center position with offset
-    const baseX = region.x + (region.width - baseWidth) / 2
-    const baseY = region.y + (region.height - baseHeight) / 2
-
-    const dx = baseX - (scaledWidth - baseWidth) / 2 + config.offsetX
-    const dy = baseY - (scaledHeight - baseHeight) / 2 + config.offsetY
-
-    return {
-      dx,
-      dy,
-      dw: scaledWidth,
-      dh: scaledHeight,
-      photoImg,
-    }
+    const placement = calculatePhotoPlacement(region, photoImg.width, photoImg.height, config)
+    return { ...placement, photoImg }
   }
 
   // Handle mouse down on region for dragging
@@ -161,6 +138,56 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
       startX: x,
       startY: y,
       startConfig: { ...config },
+      mode: 'move',
+    })
+  }
+
+  // 四角手柄 mousedown：启动缩放拖拽，以对角点为锚
+  const handleResizeMouseDown = (
+    e: React.MouseEvent,
+    regionId: string,
+    corner: 'nw' | 'ne' | 'sw' | 'se'
+  ) => {
+    e.stopPropagation()
+    e.preventDefault()
+
+    const region = template?.regions.find((r) => r.id === regionId)
+    if (!region || !region.photoId) return
+
+    const photo = photos.find((p) => p.id === region.photoId)
+    if (!photo || !loadedPhotos.has(photo.id)) return
+
+    const photoImg = loadedPhotos.get(photo.id)!
+    const config = photoConfigs[regionId] || { offsetX: 0, offsetY: 0, scale: 1 }
+
+    // cover 基准尺寸（scale=1 时）
+    const photoRatio = photoImg.width / photoImg.height
+    const regionRatio = region.width / region.height
+    let baseWidth: number, baseHeight: number
+    if (photoRatio > regionRatio) {
+      baseHeight = region.height
+      baseWidth = baseHeight * photoRatio
+    } else {
+      baseWidth = region.width
+      baseHeight = baseWidth / photoRatio
+    }
+
+    // 对角锚点：拖动某角时，其对角点作为缩放参考原点
+    const anchorX = corner.startsWith('w') ? region.x + region.width : region.x
+    const anchorY = corner.endsWith('n') ? region.y + region.height : region.y
+
+    const { x, y } = screenToTemplate(e.clientX, e.clientY)
+    selectRegion(regionId)
+    setDragState({
+      regionId,
+      startX: x,
+      startY: y,
+      startConfig: { ...config },
+      mode: 'resize',
+      baseWidth,
+      baseHeight,
+      anchorX,
+      anchorY,
     })
   }
 
@@ -169,6 +196,27 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
     if (!dragState) return
 
     const { x, y } = screenToTemplate(e.clientX, e.clientY)
+
+    if (dragState.mode === 'resize') {
+      // 锁定宽高比：以被拖角的对角点为锚，按鼠标到锚点的距离比换算缩放
+      if (
+        dragState.baseWidth == null ||
+        dragState.baseHeight == null ||
+        dragState.anchorX == null ||
+        dragState.anchorY == null
+      )
+        return
+
+      const startDist = Math.hypot(dragState.startX - dragState.anchorX, dragState.startY - dragState.anchorY) || 1
+      const curDist = Math.hypot(x - dragState.anchorX, y - dragState.anchorY)
+      const ratio = curDist / startDist
+
+      const newScale = Math.max(0.3, Math.min(5, dragState.startConfig.scale * ratio))
+      updatePhotoConfig(dragState.regionId, { scale: newScale })
+      return
+    }
+
+    // move 模式：平移
     const deltaX = x - dragState.startX
     const deltaY = y - dragState.startY
 
@@ -182,34 +230,6 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
   const handleMouseUp = () => {
     setDragState(null)
   }
-
-  // Handle wheel for scaling
-  const handleWheel = useCallback(
-    (e: WheelEvent) => {
-      if (!selectedRegionId) return
-
-      e.preventDefault()
-      const config = photoConfigs[selectedRegionId] || { offsetX: 0, offsetY: 0, scale: 1 }
-
-      // Scale by 0.1 per wheel tick
-      const delta = e.deltaY > 0 ? -0.1 : 0.1
-      const newScale = Math.max(0.5, Math.min(3, config.scale + delta))
-
-      updatePhotoConfig(selectedRegionId, { scale: newScale })
-    },
-    [selectedRegionId, photoConfigs, updatePhotoConfig]
-  )
-
-  // Add non-passive wheel listener to prevent page scroll
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    container.addEventListener('wheel', handleWheel, { passive: false })
-    return () => {
-      container.removeEventListener('wheel', handleWheel)
-    }
-  }, [handleWheel])
 
   // Handle click on canvas to deselect
   const handleCanvasClick = (e: React.MouseEvent) => {
@@ -231,7 +251,7 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-medium text-slate-700">合成预览</h3>
         <div className="text-xs text-slate-500">
-          {selectedRegionId ? '拖拽调整位置，滚轮缩放' : '点击选中区域进行调整'}
+          {selectedRegionId ? '拖拽照片移动位置，拖动四角缩放' : '点击选中区域进行调整'}
         </div>
       </div>
 
@@ -352,25 +372,66 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
                   </svg>
                 </div>
               )}
+
+              {/* 四角缩放手柄：仅选中且有照片时显示 */}
+              {isSelected && hasPhoto && (
+                <>
+                  {([
+                    { corner: 'nw', cls: '-top-1.5 -left-1.5 cursor-nwse-resize' },
+                    { corner: 'ne', cls: '-top-1.5 -right-1.5 cursor-nesw-resize' },
+                    { corner: 'sw', cls: '-bottom-1.5 -left-1.5 cursor-nesw-resize' },
+                    { corner: 'se', cls: '-bottom-1.5 -right-1.5 cursor-nwse-resize' },
+                  ] as const).map(({ corner, cls }) => (
+                    <div
+                      key={corner}
+                      className={`absolute w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm shadow-sm z-10 ${cls}`}
+                      onMouseDown={(e) => handleResizeMouseDown(e, region.id, corner)}
+                    />
+                  ))}
+                </>
+              )}
             </div>
           )
         })}
       </div>
 
-      {/* Scale info for selected region */}
-      {selectedRegionId && (
-        <div className="mt-3 flex items-center justify-center gap-4 text-xs text-slate-500">
-          <span>
-            缩放:{' '}
-            {Math.round((photoConfigs[selectedRegionId]?.scale || 1) * 100)}%
-          </span>
-          <span>·</span>
-          <span>
-            偏移: ({Math.round(photoConfigs[selectedRegionId]?.offsetX || 0)},{' '}
-            {Math.round(photoConfigs[selectedRegionId]?.offsetY || 0)})
-          </span>
-        </div>
-      )}
+      {/* 刻度尺：显示照片在模板坐标系下的实际渲染尺寸（原始像素） */}
+      {selectedRegionId &&
+        (() => {
+          const region = template.regions.find((r) => r.id === selectedRegionId)
+          const photo = region ? getPhotoForRegion(region) : undefined
+          const config = photoConfigs[selectedRegionId] || { offsetX: 0, offsetY: 0, scale: 1 }
+          let photoW = 0,
+            photoH = 0
+          if (region && photo && loadedPhotos.has(photo.id)) {
+            const img = loadedPhotos.get(photo.id)!
+            const placement = calculatePhotoPlacement(region, img.width, img.height, config)
+            photoW = Math.round(placement.dw)
+            photoH = Math.round(placement.dh)
+          }
+          return (
+            <div className="mt-3 flex flex-col items-center gap-1.5 text-xs text-slate-500">
+              <div className="flex items-center gap-4 font-mono tabular-nums">
+                <span className="flex items-center gap-1">
+                  <span className="text-slate-400">宽</span>
+                  <span className="text-slate-700 font-medium">{photoW}</span>
+                  <span className="text-slate-400">px</span>
+                </span>
+                <span className="text-slate-300">×</span>
+                <span className="flex items-center gap-1">
+                  <span className="text-slate-400">高</span>
+                  <span className="text-slate-700 font-medium">{photoH}</span>
+                  <span className="text-slate-400">px</span>
+                </span>
+              </div>
+              {region && (
+                <div className="text-[11px] text-slate-400">
+                  区域 {Math.round(region.width)}×{Math.round(region.height)} px · 缩放 {Math.round(config.scale * 100)}%
+                </div>
+              )}
+            </div>
+          )
+        })()}
     </div>
   )
 }
