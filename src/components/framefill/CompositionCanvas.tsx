@@ -1,7 +1,7 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
 import { useFrameFillStore } from '../../store/framefillStore'
 import type { FillRegion, RegionPhotoConfig, FillPhoto } from '../../types/framefill'
-import { calculatePhotoPlacement } from '../../services/photoPlacement'
+import { calculatePhotoPlacement, calculateCoverScale } from '../../services/photoPlacement'
 
 interface CompositionCanvasProps {
   maxDisplaySize?: number
@@ -25,16 +25,33 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
   const updatePhotoConfig = useFrameFillStore((state) => state.updatePhotoConfig)
   const selectRegion = useFrameFillStore((state) => state.selectRegion)
 
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [dragState, setDragState] = useState<DragState | null>(null)
+  const lastDistRef = useRef(0)  // 缩放拖拽：上次鼠标到锚点的距离，用于增量缩放
   const [loadedPhotos, setLoadedPhotos] = useState<Map<string, HTMLImageElement>>(new Map())
   const [loadedTemplate, setLoadedTemplate] = useState<HTMLImageElement | null>(null)
+  const [availableWidth, setAvailableWidth] = useState(maxDisplaySize)
+
+  // 测量容器实际可用宽度，移动端自动收缩画布
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper) return
+    const update = () => setAvailableWidth(wrapper.clientWidth)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(wrapper)
+    return () => ro.disconnect()
+  }, [])
+
+  // 实际显示尺寸上限 = 容器宽度 与 maxDisplaySize 取小值
+  const effectiveMax = Math.min(availableWidth, maxDisplaySize)
 
   // Calculate display scale
   const scale = template
     ? template.width > template.height
-      ? maxDisplaySize / template.width
-      : maxDisplaySize / template.height
+      ? effectiveMax / template.width
+      : effectiveMax / template.height
     : 1
   const displayWidth = template ? template.width * scale : 0
   const displayHeight = template ? template.height * scale : 0
@@ -162,6 +179,7 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
     const anchorY = corner.endsWith('n') ? region.y + region.height : region.y
 
     const { x, y } = screenToTemplate(e.clientX, e.clientY)
+    lastDistRef.current = Math.hypot(x - anchorX, y - anchorY) || 1
     selectRegion(regionId)
     setDragState({
       regionId,
@@ -181,19 +199,25 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
     const { x, y } = screenToTemplate(e.clientX, e.clientY)
 
     if (dragState.mode === 'resize') {
-      // 锁定宽高比：以被拖角的对角点为锚，按鼠标到锚点的距离比换算缩放
+      // 锁定宽高比：以对角锚点为参考，用增量距离比缩放（每次基于当前 scale，不会卡死）
       if (dragState.anchorX == null || dragState.anchorY == null) return
 
       const region = template?.regions.find((r) => r.id === dragState.regionId)
       const photo = region ? photos.find((p) => p.id === region.photoId) : undefined
       if (!region || !photo) return
 
-      const startDist = Math.hypot(dragState.startX - dragState.anchorX, dragState.startY - dragState.anchorY) || 1
       const curDist = Math.hypot(x - dragState.anchorX, y - dragState.anchorY)
-      const ratio = curDist / startDist
+      const lastDist = lastDistRef.current || 1
+      const ratio = curDist / lastDist
 
-      // 按原图等比缩放，下限 0.1，上限 10
-      const newScale = Math.max(0.1, Math.min(10, dragState.startConfig.scale * ratio))
+      // 当前 scale（实时从 store 读，避免和快照脱节）
+     const currentScale = photoConfigs[dragState.regionId]?.scale ?? 1
+     // 下限 = 刚好 cover 区域（不露白），上限 = cover 的 5 倍（500%）
+     const minScale = calculateCoverScale(region, photo.width, photo.height)
+     const maxScale = minScale * 5
+     const newScale = Math.max(minScale, Math.min(maxScale, currentScale * ratio))
+
+      lastDistRef.current = curDist
       updatePhotoConfig(dragState.regionId, { scale: newScale })
       return
     }
@@ -229,7 +253,7 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
   }
 
   return (
-    <div className="bg-white rounded-xl p-4 shadow-sm">
+    <div ref={wrapperRef} className="bg-white rounded-xl p-4 shadow-sm w-full">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-medium text-slate-700">合成预览</h3>
         <div className="text-xs text-slate-500">
@@ -396,12 +420,15 @@ export function CompositionCanvas({ maxDisplaySize = 500 }: CompositionCanvasPro
           const region = template.regions.find((r) => r.id === selectedRegionId)
           const photo = region ? getPhotoForRegion(region) : undefined
           const config = photoConfigs[selectedRegionId] || { offsetX: 0, offsetY: 0, scale: 1 }
-          const zoomPct = Math.round(config.scale * 100)
+          let zoomPct = 100
           let photoW = 0,
             photoH = 0
           if (region && photo && loadedPhotos.has(photo.id)) {
             const img = loadedPhotos.get(photo.id)!
             const placement = calculatePhotoPlacement(region, img.width, img.height, config)
+            // 相对满屏的缩放：100% = 刚好 cover 区域
+            const cover = calculateCoverScale(region, img.width, img.height)
+            zoomPct = Math.round((config.scale / cover) * 100)
             photoW = Math.round(placement.dw)
             photoH = Math.round(placement.dh)
           }

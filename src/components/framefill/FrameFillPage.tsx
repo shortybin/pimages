@@ -38,13 +38,13 @@ export function FrameFillPage() {
     }
   }, [template, stage, setStage])
 
-  // Auto compose when entering preview stage
-  useEffect(() => {
-    if (stage === 'preview' && canComposeImage) {
-      setIsComposing(true)
-      compose().finally(() => setIsComposing(false))
-    }
-  }, [stage]) // eslint-disable-line react-hooks/exhaustive-deps
+  // 进入预览阶段：事件驱动触发合成（避免 effect 内 setState 的级联渲染）
+  const enterPreview = () => {
+    if (!canComposeImage) return
+    setStage('preview')
+    setIsComposing(true)
+    compose().finally(() => setIsComposing(false))
+  }
 
   // Clean up on unmount
   useEffect(() => {
@@ -64,13 +64,16 @@ export function FrameFillPage() {
       </div>
 
       {/* Stage Indicator */}
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex flex-wrap items-center gap-2 mb-6">
         {(['upload', 'edit', 'preview'] as const).map((s, index) => (
           <div key={s} className="flex items-center">
             <button
               onClick={() => {
                 if (s === 'edit' && !canProceedToEdit) return
-                if (s === 'preview' && !canComposeImage) return
+                if (s === 'preview') {
+                  enterPreview()
+                  return
+                }
                 setStage(s)
               }}
               disabled={
@@ -93,7 +96,7 @@ export function FrameFillPage() {
               {s === 'upload' ? '上传' : s === 'edit' ? '编辑' : '预览'}
             </button>
             {index < 2 && (
-              <div className={`w-8 h-0.5 mx-1 ${
+              <div className={`hidden sm:block w-8 h-0.5 mx-1 ${
                 (s === 'upload' && canProceedToEdit) ||
                 (s === 'edit' && canComposeImage)
                   ? 'bg-slate-300'
@@ -111,9 +114,12 @@ export function FrameFillPage() {
                 reset()
               }
             }}
-            className="ml-auto text-sm text-red-500 hover:text-red-600"
+            className="ml-auto flex items-center gap-1 text-sm text-red-500 hover:text-red-600"
           >
-            清空重来
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V3a1 1 0 011-1h4a1 1 0 011 1v4" />
+            </svg>
+            <span className="hidden sm:inline">清空重来</span>
           </button>
         )}
       </div>
@@ -128,9 +134,9 @@ export function FrameFillPage() {
 
       {/* Edit Stage */}
       {stage === 'edit' && template && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Left: Canvas */}
-          <div className="lg:col-span-2">
+          <div className="md:col-span-2">
             <CompositionCanvas maxDisplaySize={600} />
           </div>
 
@@ -142,7 +148,7 @@ export function FrameFillPage() {
 
             {/* Preview button */}
             <button
-              onClick={() => setStage('preview')}
+              onClick={enterPreview}
               disabled={!canComposeImage}
               className={`w-full py-2.5 px-4 rounded-lg text-sm font-medium transition-colors ${
                 canComposeImage
@@ -158,9 +164,9 @@ export function FrameFillPage() {
 
       {/* Preview Stage */}
       {stage === 'preview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Left: Result preview */}
-          <div className="lg:col-span-2">
+          <div className="md:col-span-2">
             {isComposing ? (
               <div className="bg-white rounded-xl p-8 shadow-sm">
                 <div className="flex flex-col items-center justify-center gap-3 text-slate-500">

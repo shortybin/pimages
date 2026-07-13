@@ -8,6 +8,18 @@ export interface PhotoPlacement {
 }
 
 /**
+ * 计算让照片刚好 cover 区域所需的 scale（相对照片原始尺寸）。
+ * 用于照片首次分配时的默认值：保证默认铺满区域、能看到主体，不露白。
+ */
+export function calculateCoverScale(
+  region: FillRegion,
+  photoWidth: number,
+  photoHeight: number
+): number {
+  return Math.max(region.width / photoWidth, region.height / photoHeight)
+}
+
+/**
  * 计算照片在模板坐标系下的渲染位置和尺寸。
  *
  * 纯粹按照片原始尺寸等比缩放，与区域无关：

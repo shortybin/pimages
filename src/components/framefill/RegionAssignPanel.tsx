@@ -5,8 +5,9 @@ export function RegionAssignPanel() {
   const template = useFrameFillStore((state) => state.template)
   const photos = useFrameFillStore((state) => state.photos)
   const selectedRegionId = useFrameFillStore((state) => state.selectedRegionId)
-  const assignPhotoToRegion = useFrameFillStore((state) => state.assignPhotoToRegion)
-  const selectRegion = useFrameFillStore((state) => state.selectRegion)
+ const assignPhotoToRegion = useFrameFillStore((state) => state.assignPhotoToRegion)
+ const selectRegion = useFrameFillStore((state) => state.selectRegion)
+ const syncFromFirstRegion = useFrameFillStore((state) => state.syncFromFirstRegion)
 
   const [expandedRegionId, setExpandedRegionId] = useState<string | null>(null)
 
@@ -19,12 +20,17 @@ export function RegionAssignPanel() {
     return photos.find((p) => p.id === photoId)
   }
 
-  const handlePhotoSelect = (regionId: string, photoId: string | null) => {
-    assignPhotoToRegion(regionId, photoId)
-    setExpandedRegionId(null)
-  }
+ const handlePhotoSelect = (regionId: string, photoId: string | null) => {
+   assignPhotoToRegion(regionId, photoId)
+   setExpandedRegionId(null)
+ }
 
-  return (
+ const canAutoAssign = photos.length >= template.regions.length
+ const canSync =
+   !!template.regions[0]?.photoId &&
+   template.regions.slice(1).some((r) => r.photoId)
+
+ return (
     <div className="bg-white rounded-xl p-4 shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-medium text-slate-700">区域分配</h3>
@@ -174,24 +180,37 @@ export function RegionAssignPanel() {
         </div>
       )}
 
-      {/* Quick actions */}
-      {photos.length >= template.regions.length && template.regions.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-slate-100">
-          <button
-            onClick={() => {
-              // Auto-assign photos to regions
-              template.regions.forEach((region, index) => {
-                if (index < photos.length) {
-                  assignPhotoToRegion(region.id, photos[index].id)
-                }
-              })
-            }}
-            className="w-full text-sm text-indigo-600 hover:text-indigo-700 py-1.5 rounded hover:bg-indigo-50 transition-colors"
-          >
-            自动按顺序分配
-          </button>
-        </div>
-      )}
+     {/* Quick actions */}
+     {(canAutoAssign || canSync) && (
+      <div className="mt-3 pt-3 border-t border-slate-100 space-y-1">
+        {canAutoAssign && (
+         <button
+           onClick={() => {
+             // Auto-assign photos to regions
+             template.regions.forEach((region, index) => {
+               if (index < photos.length) {
+                 assignPhotoToRegion(region.id, photos[index].id)
+               }
+             })
+           }}
+           className="w-full text-sm text-indigo-600 hover:text-indigo-700 py-1.5 rounded hover:bg-indigo-50 transition-colors"
+         >
+           自动按顺序分配
+         </button>
+        )}
+       {canSync && (
+           <button
+             onClick={() => syncFromFirstRegion()}
+             className="w-full text-sm text-emerald-600 hover:text-emerald-700 py-1.5 rounded hover:bg-emerald-50 transition-colors flex items-center justify-center gap-1.5"
+           >
+             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h8m-8 5h8m-8 5h8M3 5l2 2-2 2M3 12l2 2-2 2M3 19l2 2-2 2" />
+             </svg>
+             同步首图缩放到所有区域
+           </button>
+         )}
+       </div>
+     )}
     </div>
   )
 }

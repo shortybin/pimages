@@ -6,13 +6,11 @@ import type {
   RegionPhotoConfig,
   FrameFillStage,
 } from '../types/framefill'
-import {
-  detectAllTransparentRegions,
-  loadImage,
-  getImageData,
-  readFileAsImage,
-} from '../services/templateProcessor'
-import { calculatePhotoPlacement } from '../services/photoPlacement'
+import { detectAllTransparentRegions } from '../services/templateProcessor'
+import { loadImage, getImageData, readFileAsImage } from '../utils/imageLoader'
+import { calculatePhotoPlacement, calculateCoverScale } from '../services/photoPlacement'
+import { generateId } from '../utils/id'
+import { download } from '../utils/download'
 
 interface FrameFillStore {
   // Core state
@@ -37,11 +35,14 @@ interface FrameFillStore {
 
   // Region assignment
   assignPhotoToRegion: (regionId: string, photoId: string | null) => void
-  updatePhotoConfig: (regionId: string, config: Partial<RegionPhotoConfig>) => void
-  selectRegion: (regionId: string | null) => void
+ updatePhotoConfig: (regionId: string, config: Partial<RegionPhotoConfig>) => void
+ selectRegion: (regionId: string | null) => void
 
-  // Stage navigation
-  setStage: (stage: FrameFillStage) => void
+ // Sync: copy first region's config to all other assigned regions
+ syncFromFirstRegion: () => void
+
+ // Stage navigation
+ setStage: (stage: FrameFillStage) => void
 
   // Composition
   compose: () => Promise<string>
@@ -53,7 +54,6 @@ interface FrameFillStore {
   reset: () => void
 }
 
-const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
 const defaultPhotoConfig: RegionPhotoConfig = {
   offsetX: 0,
@@ -232,10 +232,15 @@ export const useFrameFillStore = create<FrameFillStore>((set, get) => ({
         region.id === regionId ? { ...region, photoId } : region
       )
 
-      // 分配新照片时使用默认 scale:1（照片原始大小）
+      // 分配新照片时，算出刚好 cover 区域的初始 scale，保证默认能看到主体
       const newPhotoConfigs = { ...state.photoConfigs }
       if (photoId) {
-        newPhotoConfigs[regionId] = { ...defaultPhotoConfig }
+        const region = state.template.regions.find((r) => r.id === regionId)
+        const photo = state.photos.find((p) => p.id === photoId)
+        const initScale = region && photo
+          ? calculateCoverScale(region, photo.width, photo.height)
+          : 1
+        newPhotoConfigs[regionId] = { offsetX: 0, offsetY: 0, scale: initScale }
       }
 
       return {
@@ -254,14 +259,45 @@ export const useFrameFillStore = create<FrameFillStore>((set, get) => ({
     }))
   },
 
-  selectRegion: (regionId: string | null) => {
-    set({ selectedRegionId: regionId })
-  },
+ selectRegion: (regionId: string | null) => {
+   set({ selectedRegionId: regionId })
+ },
 
-  // Stage navigation
-  setStage: (stage: FrameFillStage) => {
-    set({ stage })
-  },
+ // 将第一个区域的 scale/offset 复制到其他已分配照片的区域
+ syncFromFirstRegion: () => {
+   const { template, photoConfigs, photos } = get()
+   if (!template || template.regions.length === 0) return
+
+   const firstRegion = template.regions[0]
+   const firstConfig = photoConfigs[firstRegion.id]
+   if (!firstConfig || !firstRegion.photoId) return
+
+   const newPhotoConfigs = { ...photoConfigs }
+   for (const region of template.regions) {
+     if (region.id === firstRegion.id || !region.photoId) continue
+
+     const photo = photos.find((p) => p.id === region.photoId)
+     if (!photo) continue
+
+     // clamp 到目标区域的有效范围，防止缩放超出 cover 或上限
+     const minScale = calculateCoverScale(region, photo.width, photo.height)
+     const maxScale = minScale * 5
+     const scale = Math.max(minScale, Math.min(maxScale, firstConfig.scale))
+
+     newPhotoConfigs[region.id] = {
+       offsetX: firstConfig.offsetX,
+       offsetY: firstConfig.offsetY,
+       scale,
+     }
+   }
+
+   set({ photoConfigs: newPhotoConfigs })
+ },
+
+ // Stage navigation
+ setStage: (stage: FrameFillStage) => {
+   set({ stage })
+ },
 
   // Composition
   compose: async () => {
@@ -318,11 +354,8 @@ export const useFrameFillStore = create<FrameFillStore>((set, get) => ({
     const { resultDataUrl, template } = get()
     if (!resultDataUrl) return
 
-    const link = document.createElement('a')
     const safeName = template?.name.replace(/\.[^/.]+$/, '') || 'framefill'
-    link.download = `${safeName}_composed.png`
-    link.href = resultDataUrl
-    link.click()
+    download(resultDataUrl, `${safeName}_composed.png`)
   },
 
   // Reset
