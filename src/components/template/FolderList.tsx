@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useTemplateStore, getMatchingTemplates } from '../../store/templateStore'
 
 export function FolderList() {
@@ -7,24 +7,11 @@ export function FolderList() {
   const removeFolder = useTemplateStore((state) => state.removeFolder)
   const setFolderTemplate = useTemplateStore((state) => state.setFolderTemplate)
 
-  // 使用 Set 管理展开状态，默认全部展开
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
-
-  // 当有新文件夹添加时，自动展开
-  useEffect(() => {
-    const currentIds = new Set(folders.map(f => f.id))
-    const newIds = [...currentIds].filter(id => !expandedFolders.has(id))
-    if (newIds.length > 0) {
-      setExpandedFolders(prev => {
-        const newSet = new Set(prev)
-        newIds.forEach(id => newSet.add(id))
-        return newSet
-      })
-    }
-  }, [folders])
+  // 用折叠集合管理：默认全部展开，新文件夹天然展开，无需 effect 同步
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set())
 
   const toggleFolder = (folderId: string) => {
-    setExpandedFolders(prev => {
+    setCollapsedFolders(prev => {
       const newSet = new Set(prev)
       if (newSet.has(folderId)) {
         newSet.delete(folderId)
@@ -51,7 +38,7 @@ export function FolderList() {
             templates
           )
           const hasMatch = matchingTemplates.length > 0
-          const isExpanded = expandedFolders.has(folder.id)
+          const isExpanded = !collapsedFolders.has(folder.id)
 
           return (
             <div

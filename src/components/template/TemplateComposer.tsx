@@ -70,7 +70,6 @@ export function TemplateComposer() {
               type="file"
               accept="image/*"
               multiple
-              // @ts-ignore
               webkitdirectory=""
               className="hidden"
               onChange={async (e) => {

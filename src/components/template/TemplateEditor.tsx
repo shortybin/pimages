@@ -83,7 +83,7 @@ export function TemplateEditor({ template, onClose }: TemplateEditorProps) {
       const deltaY = y - dragState.startY
 
       const { startRegion, dragType } = dragState
-      let newRegion = { ...startRegion }
+      const newRegion = { ...startRegion }
 
       switch (dragType) {
         case 'move':

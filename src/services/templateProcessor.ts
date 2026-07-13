@@ -1,11 +1,6 @@
 import type { TransparentRegion, PhotoItem, TemplateItem, FitMode } from '../types/template'
-
-/**
- * Generate unique ID
- */
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-}
+import { generateId } from '../utils/id'
+import { loadImage } from '../utils/imageLoader'
 
 /**
  * Detect all transparent regions in an image using flood-fill algorithm
@@ -27,39 +22,43 @@ export function detectAllTransparentRegions(
     return alpha < alphaThreshold
   }
 
-  // Flood fill to find connected region
+  // Flood fill to find connected region.
+  // 使用扁平化 Uint32Array 队列 + 头指针（head）替代 shift()，
+  // 避免 O(n) 的数组搬移；大图上性能差异显著。
+  // 像素编码为 y * width + x，存入扁平队列。
   const floodFill = (startX: number, startY: number): TransparentRegion | null => {
-    const pixels: [number, number][] = []
     let minX = width, minY = height, maxX = 0, maxY = 0
     let pixelCount = 0
 
-    // BFS queue
-    const queue: [number, number][] = [[startX, startY]]
+    // 队列容量上界 = 图像像素数，足够安全
+    const queue = new Uint32Array(width * height)
+    let head = 0
+    let tail = 0
+    queue[tail++] = startY * width + startX
 
-    while (queue.length > 0) {
-      const [x, y] = queue.shift()!
-      const idx = y * width + x
+    while (head < tail) {
+      const p = queue[head++]
+      const x = p % width
+      const y = (p - x) / width
 
-      if (visited[idx]) continue
+      if (visited[p]) continue
       if (!isTransparent(x, y)) continue
 
-      visited[idx] = 1
+      visited[p] = 1
       pixelCount++
-      pixels.push([x, y])
 
-      minX = Math.min(minX, x)
-      minY = Math.min(minY, y)
-      maxX = Math.max(maxX, x)
-      maxY = Math.max(maxY, y)
+      if (x < minX) minX = x
+      if (y < minY) minY = y
+      if (x > maxX) maxX = x
+      if (y > maxY) maxY = y
 
-      // Add neighbors (4-directional)
-      if (x > 0) queue.push([x - 1, y])
-      if (x < width - 1) queue.push([x + 1, y])
-      if (y > 0) queue.push([x, y - 1])
-      if (y < height - 1) queue.push([x, y + 1])
+      // 4 邻接：入队前不判 visited，取出时再判（避免重复检查的开销）
+      if (x > 0) queue[tail++] = p - 1
+      if (x < width - 1) queue[tail++] = p + 1
+      if (y > 0) queue[tail++] = p - width
+      if (y < height - 1) queue[tail++] = p + width
     }
 
-    // Filter out small regions
     if (pixelCount < minAreaSize) return null
 
     return {
@@ -209,51 +208,7 @@ export async function composeFolderWithTemplate(
   return composeMultipleRegions(templateImg, photoMap, regions, fitMode)
 }
 
-/**
- * Load an image from a data URL
- */
-export function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => resolve(img)
-    img.onerror = reject
-    img.src = src
-  })
-}
 
-/**
- * Get ImageData from an image
- */
-export function getImageData(img: HTMLImageElement): ImageData {
-  const canvas = document.createElement('canvas')
-  canvas.width = img.width
-  canvas.height = img.height
-  const ctx = canvas.getContext('2d')!
-  ctx.drawImage(img, 0, 0)
-  return ctx.getImageData(0, 0, img.width, img.height)
-}
-
-/**
- * Read a file and return its data URL and dimensions
- */
-export function readFileAsImage(
-  file: File
-): Promise<{ dataUrl: string; width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string
-      const img = new Image()
-      img.onload = () => {
-        resolve({ dataUrl, width: img.width, height: img.height })
-      }
-      img.onerror = reject
-      img.src = dataUrl
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
 
 /**
  * Convert data URL to Blob

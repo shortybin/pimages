@@ -41,13 +41,13 @@ export function Header() {
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
-      <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {/* Back Button */}
           {!isHome && (
             <button
               onClick={() => navigate('/')}
-              className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 hover:bg-slate-200
                          flex items-center justify-center text-slate-600
                          transition-colors duration-200"
               title="返回首页"
@@ -60,7 +60,7 @@ export function Header() {
 
           {/* Logo */}
           <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center
                         bg-gradient-to-br from-indigo-500 to-purple-600
                         ${isHome ? 'cursor-default' : 'cursor-pointer'}`}
             onClick={() => !isHome && navigate('/')}
@@ -74,8 +74,8 @@ export function Header() {
 
           {/* Title */}
           <div>
-            <h1 className="text-xl font-bold text-slate-800">{getPageTitle()}</h1>
-            <p className="text-xs text-slate-500">{getPageSubtitle()}</p>
+            <h1 className="text-lg sm:text-xl font-bold text-slate-800">{getPageTitle()}</h1>
+            <p className="hidden sm:block text-xs text-slate-500">{getPageSubtitle()}</p>
           </div>
         </div>
       </div>

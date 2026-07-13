@@ -1,8 +1,8 @@
 import { create } from 'zustand'
+import { generateId } from '../utils/id'
 import type { SlideshowImage, SlideshowSettings, SlideshowAudio, AudioSettings } from '../types/slideshow'
 import { defaultSettings } from '../types/slideshow'
 
-const generateId = () => Math.random().toString(36).substring(2, 15)
 
 // 获取音频时长
 const getAudioDuration = (file: File): Promise<number> => {

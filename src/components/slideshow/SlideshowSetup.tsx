@@ -98,7 +98,6 @@ export function SlideshowSetup() {
               <input
                 ref={folderInputRef}
                 type="file"
-                // @ts-expect-error webkitdirectory is not in types
                 webkitdirectory=""
                 multiple
                 onChange={handleFolderSelect}

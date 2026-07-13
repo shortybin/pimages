@@ -6,12 +6,63 @@ export function ExportSettings() {
   const exportMessage = useAppStore((s) => s.exportMessage)
   const projects = useAppStore((s) => s.projects)
   const exportAll = useAppStore((s) => s.exportAll)
+  const exportOptions = useAppStore((s) => s.exportOptions)
+  const updateExportOptions = useAppStore((s) => s.updateExportOptions)
 
   const canExport = projects.length > 0 && !isExporting
+  const isJpeg = exportOptions.format === 'jpeg'
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="p-4">
+      <div className="p-4 space-y-4">
+        {/* 导出格式 */}
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-2">导出格式</label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => updateExportOptions({ format: 'png' })}
+              className={`py-2 rounded-lg text-sm font-medium transition-colors ${
+                !isJpeg
+                  ? 'bg-indigo-500 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              PNG
+            </button>
+            <button
+              onClick={() => updateExportOptions({ format: 'jpeg' })}
+              className={`py-2 rounded-lg text-sm font-medium transition-colors ${
+                isJpeg
+                  ? 'bg-indigo-500 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              JPEG
+            </button>
+          </div>
+        </div>
+
+        {/* 质量：仅 JPEG 生效 */}
+        <div className={isJpeg ? '' : 'opacity-40 pointer-events-none'}>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-medium text-slate-600">质量</label>
+            <span className="text-xs text-slate-500 tabular-nums">{exportOptions.quality}%</span>
+          </div>
+          <input
+            type="range"
+            min={10}
+            max={100}
+            step={5}
+            value={exportOptions.quality}
+            onChange={(e) => updateExportOptions({ quality: Number(e.target.value) })}
+            disabled={!isJpeg}
+            className="w-full accent-indigo-500"
+          />
+          <p className="mt-1 text-[11px] text-slate-400">
+            {isJpeg ? '数值越低文件越小，画质越低' : 'PNG 为无损格式，不支持质量调节'}
+          </p>
+        </div>
+
         <button
           onClick={exportAll}
           disabled={!canExport}

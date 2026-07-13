@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSlideshowStore } from '../../store/slideshowStore'
-import { AudioPlayer, useAudioControls } from './AudioPlayer'
+import { AudioPlayer } from './AudioPlayer'
+import { useAudioControls } from './useAudioControls'
 
 export function SlideshowPlayer() {
   const images = useSlideshowStore((state) => state.images)

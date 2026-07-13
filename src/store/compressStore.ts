@@ -1,8 +1,9 @@
 import { create } from 'zustand'
+import { generateId } from '../utils/id'
+import { download } from '../utils/download'
 import type { CompressOptions, CompressImageItem } from '../types/compress'
 import { compressImage } from '../services/imageCompressor'
 
-const generateId = () => Math.random().toString(36).substring(2, 15)
 
 interface CompressState {
   images: CompressImageItem[]
@@ -135,12 +136,7 @@ export const useCompressStore = create<CompressState>((set, get) => ({
 
     if (!image?.compressedFile) return
 
-    const url = URL.createObjectURL(image.compressedFile)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `compressed_${image.name}`
-    link.click()
-    URL.revokeObjectURL(url)
+    download(image.compressedFile, `compressed_${image.name}`)
   },
 
   downloadAll: () => {

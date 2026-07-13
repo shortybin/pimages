@@ -13,14 +13,14 @@ export function CompressPage() {
       </div>
 
       {/* Upload Zone and Settings - Side by Side */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
         {/* Drop Zone - Left Side */}
-        <div className="lg:col-span-3">
+        <div className="md:col-span-3">
           <CompressDropZone />
         </div>
 
         {/* Settings - Right Side */}
-        <div className="lg:col-span-2">
+        <div className="md:col-span-2">
           <CompressSettings />
         </div>
       </div>

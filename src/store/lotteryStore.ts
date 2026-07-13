@@ -1,8 +1,8 @@
 import { create } from 'zustand'
+import { generateId } from '../utils/id'
 import type { LotteryImage, LotterySettings } from '../types/lottery'
 import { defaultLotterySettings } from '../types/lottery'
 
-const generateId = () => Math.random().toString(36).substring(2, 15)
 
 interface LotteryWinner {
   id: string

@@ -10,12 +10,12 @@ import type {
 } from '../types/template'
 import {
   detectAllTransparentRegions,
-  loadImage,
-  getImageData,
-  readFileAsImage,
   dataUrlToBlob,
   composeFolderWithTemplate,
 } from '../services/templateProcessor'
+import { loadImage, getImageData, readFileAsImage } from '../utils/imageLoader'
+import { generateId } from '../utils/id'
+import { download } from '../utils/download'
 
 interface TemplateStore {
   // State
@@ -51,7 +51,6 @@ interface TemplateStore {
   reset: () => void
 }
 
-const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
 const initialState = {
   templates: [],
@@ -336,25 +335,15 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
     }
 
     const content = await zip.generateAsync({ type: 'blob' })
-    const url = URL.createObjectURL(content)
-
-    const link = document.createElement('a')
-    link.download = `composites_${Date.now()}.zip`
-    link.href = url
-    link.click()
-
-    URL.revokeObjectURL(url)
+    download(content, `composites_${Date.now()}.zip`)
   },
 
   exportTask: (folderId: string) => {
     const task = get().tasks.find((t) => t.folderId === folderId)
     if (!task?.resultUrl) return
 
-    const link = document.createElement('a')
     const safeName = task.folderName.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')
-    link.download = `${safeName}.png`
-    link.href = task.resultUrl
-    link.click()
+    download(task.resultUrl, `${safeName}.png`)
   },
 
   // Reset

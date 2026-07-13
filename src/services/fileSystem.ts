@@ -1,4 +1,6 @@
 import type { ImageInfo } from '../types'
+import { download } from '../utils/download'
+import { readFileAsImage } from '../utils/imageLoader'
 
 class FileSystemService {
   isSupported(): boolean {
@@ -12,22 +14,22 @@ class FileSystemService {
     }
 
     try {
-      const handle = await (window as any).showDirectoryPicker({
+      const handle = await window.showDirectoryPicker!({
         mode: 'read',
       })
       return handle
-    } catch (e: any) {
-      if (e.name !== 'AbortError') {
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name !== 'AbortError') {
         console.error('Failed to select directory:', e)
       }
       return null
     }
   }
 
-  async scanImages(directoryHandle: any): Promise<ImageInfo[]> {
+  async scanImages(directoryHandle: FileSystemDirectoryHandle): Promise<ImageInfo[]> {
     const images: ImageInfo[] = []
 
-    const scanDirectory = async (handle: any, path: string = '') => {
+    const scanDirectory = async (handle: FileSystemDirectoryHandle, path: string = '') => {
       for await (const entry of handle.values()) {
         if (entry.kind === 'file') {
           const file = await entry.getFile()
@@ -53,38 +55,23 @@ class FileSystemService {
   }
 
   private async createImageInfo(file: File): Promise<ImageInfo | null> {
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string
-        const img = new Image()
-        img.onload = () => {
-          resolve({
-            name: file.name,
-            file,
-            width: img.width,
-            height: img.height,
-            isHorizontal: img.width > img.height,
-            dataUrl,
-          })
-        }
-        img.onerror = () => resolve(null)
-        img.src = dataUrl
+    try {
+      const { dataUrl, width, height } = await readFileAsImage(file)
+      return {
+        name: file.name,
+        file,
+        width,
+        height,
+        isHorizontal: width > height,
+        dataUrl,
       }
-      reader.onerror = () => resolve(null)
-      reader.readAsDataURL(file)
-    })
+    } catch {
+      return null
+    }
   }
 
   downloadFile(blob: Blob, filename: string): void {
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    setTimeout(() => URL.revokeObjectURL(url), 100)
+    download(blob, filename)
   }
 
   async handleFilesFromDrop(files: FileList): Promise<ImageInfo[]> {

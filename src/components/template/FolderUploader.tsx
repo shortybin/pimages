@@ -177,7 +177,6 @@ export function FolderUploader() {
         type="file"
         accept="image/*"
         multiple
-        // @ts-ignore - webkitdirectory is not in the type definition
         webkitdirectory=""
         className="hidden"
         onChange={handleChange}

@@ -1,7 +1,9 @@
 import { create } from 'zustand'
+import { generateId } from '../utils/id'
+import { download } from '../utils/download'
+import { readFileAsImage } from '../utils/imageLoader'
 import type { CutoutImage, SelectionMode, HistoryState } from '../types/cutout'
 
-const generateId = () => Math.random().toString(36).substring(2, 15)
 
 interface CutoutState {
   image: CutoutImage | null
@@ -56,35 +58,22 @@ export const useCutoutStore = create<CutoutState>((set, get) => ({
   rectHeight: 100,
 
   setImage: async (file: File) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string
-        const img = new Image()
-        img.onload = () => {
-          const cutoutImage: CutoutImage = {
-            id: generateId(),
-            name: file.name,
-            originalDataUrl: dataUrl,
-            processedDataUrl: dataUrl,
-            width: img.width,
-            height: img.height,
-          }
-          set({
-            image: cutoutImage,
-            history: [],
-            historyIndex: -1,
-            zoom: 1,
-            canvasUpdateKey: 0,
-            resetKey: 0,
-          })
-          resolve()
-        }
-        img.onerror = reject
-        img.src = dataUrl
-      }
-      reader.onerror = reject
-      reader.readAsDataURL(file)
+    const { dataUrl, width, height } = await readFileAsImage(file)
+    const cutoutImage: CutoutImage = {
+      id: generateId(),
+      name: file.name,
+      originalDataUrl: dataUrl,
+      processedDataUrl: dataUrl,
+      width,
+      height,
+    }
+    set({
+      image: cutoutImage,
+      history: [],
+      historyIndex: -1,
+      zoom: 1,
+      canvasUpdateKey: 0,
+      resetKey: 0,
     })
   },
 
@@ -165,10 +154,7 @@ export const useCutoutStore = create<CutoutState>((set, get) => ({
     const { image } = get()
     if (!image) return
 
-    const link = document.createElement('a')
-    link.download = `cutout_${image.name.replace(/\.[^/.]+$/, '')}.png`
-    link.href = image.processedDataUrl
-    link.click()
+    download(image.processedDataUrl, `cutout_${image.name.replace(/\.[^/.]+$/, '')}.png`)
   },
 
   clearAll: () => {

@@ -1,6 +1,12 @@
 import type { ImageInfo, ImageLayout, WatermarkOptions, BackgroundPreset } from '../types'
 import { drawWatermark } from '../utils/watermark'
+import { loadImage } from '../utils/imageLoader'
 import { getBackgroundPreset } from './layoutEngine'
+
+export interface ExportFormatOptions {
+  format: 'png' | 'jpeg'
+  quality: number  // 0-100，仅 jpeg 生效
+}
 
 export async function generateComposite(
   images: ImageInfo[],
@@ -8,7 +14,8 @@ export async function generateComposite(
   canvasWidth: number,
   canvasHeight: number,
   backgroundPreset: BackgroundPreset,
-  watermark?: WatermarkOptions
+  watermark?: WatermarkOptions,
+  exportFormat?: ExportFormatOptions
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas')
@@ -25,14 +32,7 @@ export async function generateComposite(
     drawBackground(ctx, canvasWidth, canvasHeight, backgroundPreset)
 
     // Load and draw images
-    const loadPromises = images.map((img) => {
-      return new Promise<HTMLImageElement>((res, rej) => {
-        const image = new Image()
-        image.onload = () => res(image)
-        image.onerror = rej
-        image.src = img.dataUrl
-      })
-    })
+    const loadPromises = images.map((img) => loadImage(img.dataUrl))
 
     Promise.all(loadPromises)
       .then((loadedImages) => {
@@ -50,13 +50,26 @@ export async function generateComposite(
         }
 
         // Export as blob
-        canvas.toBlob((blob) => {
-          if (blob) {
-            resolve(blob)
-          } else {
-            reject(new Error('Failed to export canvas as blob'))
-          }
-        }, 'image/png')
+        // jpeg 需要白底（透明像素会被填黑），png 保持透明
+        if (exportFormat?.format === 'jpeg') {
+          const flat = document.createElement('canvas')
+          flat.width = canvasWidth
+          flat.height = canvasHeight
+          const fctx = flat.getContext('2d')!
+          fctx.fillStyle = '#ffffff'
+          fctx.fillRect(0, 0, canvasWidth, canvasHeight)
+          fctx.drawImage(canvas, 0, 0)
+          canvas.toBlob(
+            (blob) => (blob ? resolve(blob) : reject(new Error('Failed to export canvas as blob'))),
+            'image/jpeg',
+            Math.max(0, Math.min(1, (exportFormat?.quality ?? 90) / 100))
+          )
+        } else {
+          canvas.toBlob(
+            (blob) => (blob ? resolve(blob) : reject(new Error('Failed to export canvas as blob'))),
+            'image/png'
+          )
+        }
       })
       .catch(reject)
   })
@@ -130,8 +143,9 @@ export async function processAndExport(
   canvasWidth: number,
   canvasHeight: number,
   backgroundName: string,
-  watermark?: WatermarkOptions
+  watermark?: WatermarkOptions,
+  exportFormat?: ExportFormatOptions
 ): Promise<Blob> {
   const preset = getBackgroundPreset(backgroundName)
-  return generateComposite(images, layouts, canvasWidth, canvasHeight, preset, watermark)
+  return generateComposite(images, layouts, canvasWidth, canvasHeight, preset, watermark, exportFormat)
 }

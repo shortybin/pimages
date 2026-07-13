@@ -4,8 +4,8 @@ import type { Project, WatermarkOptions, BackgroundOptions, ExportOptions, Toast
 import { determineLayoutType, calculateLayouts } from '../services/layoutEngine'
 import { processAndExport } from '../services/imageProcessor'
 import { fileSystemService } from '../services/fileSystem'
+import { generateId } from '../utils/id'
 
-const generateId = () => Math.random().toString(36).substring(2, 15)
 
 interface AppState {
   projects: Project[]
@@ -120,7 +120,7 @@ export const useAppStore = create<AppState>()(
       },
 
       exportAll: async () => {
-        const { projects, watermark, background } = get()
+        const { projects, watermark, background, exportOptions } = get()
 
         if (projects.length === 0) {
           set({ toast: { message: '没有可导出的项目', type: 'error' } })
@@ -159,11 +159,13 @@ export const useAppStore = create<AppState>()(
               canvasWidth,
               canvasHeight,
               background.preset,
-              watermark
+              watermark,
+              exportOptions
             )
 
             // Download the file
-            fileSystemService.downloadFile(blob, `${project.name}.png`)
+            const ext = exportOptions.format === 'jpeg' ? 'jpg' : 'png'
+            fileSystemService.downloadFile(blob, `${project.name}.${ext}`)
 
             set((state) => ({
               projects: state.projects.map((p) =>

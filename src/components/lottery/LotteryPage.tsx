@@ -76,9 +76,9 @@ export function LotteryPage() {
         <p className="text-sm text-slate-500 mt-1">从图片中随机抽取幸运儿</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* 左侧：设置和图片选择 */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="md:col-span-2 space-y-6">
           {/* 选择图片 */}
           <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
             <h3 className="text-sm font-medium text-slate-700">选择图片</h3>
@@ -123,7 +123,6 @@ export function LotteryPage() {
                   <input
                     ref={folderInputRef}
                     type="file"
-                    // @ts-expect-error webkitdirectory is not in types
                     webkitdirectory=""
                     multiple
                     onChange={handleFolderSelect}

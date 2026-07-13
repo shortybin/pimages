@@ -25,14 +25,14 @@ export function CutoutPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {/* Canvas Area */}
-        <div className="lg:col-span-3">
+        <div className="md:col-span-3">
           <CutoutCanvas />
         </div>
 
         {/* Tools Sidebar */}
-        <div className="lg:col-span-1 space-y-4">
+        <div className="md:col-span-1 space-y-4">
           <ToolToolbar />
 
           {/* Tips */}

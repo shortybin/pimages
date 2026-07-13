@@ -13,48 +13,53 @@ export function floodFill(
 ): ImageData {
   const { width, height, data } = imageData
   const newData = new Uint8ClampedArray(data)
-  const visited = new Set<number>()
+  // 用 Uint8Array 替代 Set<number>，位图式 visited 查询 O(1) 且内存紧凑
+  const visited = new Uint8Array(width * height)
 
-  // Get the target color at the starting point
+  // 起始点目标颜色
   const startIdx = (startY * width + startX) * 4
   const targetR = data[startIdx]
   const targetG = data[startIdx + 1]
   const targetB = data[startIdx + 2]
 
-  // BFS queue
-  const queue: [number, number][] = [[startX, startY]]
-  visited.add(startY * width + startX)
+  // 扁平化队列 + 头指针，避免 shift() 的 O(n) 搬移
+  const queue = new Uint32Array(width * height)
+  let head = 0
+  let tail = 0
+  const startP = startY * width + startX
+  queue[tail++] = startP
+  visited[startP] = 1
 
-  while (queue.length > 0) {
-    const [x, y] = queue.shift()!
-    const idx = (y * width + x) * 4
+  while (head < tail) {
+    const p = queue[head++]
+    const idx = p * 4
 
     const r = data[idx]
     const g = data[idx + 1]
     const b = data[idx + 2]
 
-    // Check if this pixel is similar to the target color
+    // 仅当颜色相似时透明化并扩散到邻居
     if (isColorSimilar(r, g, b, targetR, targetG, targetB, tolerance)) {
-      // Make transparent
       newData[idx + 3] = 0
 
-      // Check 4 neighbors (up, down, left, right)
-      const neighbors: [number, number][] = [
-        [x - 1, y],
-        [x + 1, y],
-        [x, y - 1],
-        [x, y + 1],
-      ]
+      const x = p % width
+      const y = (p - x) / width
 
-      for (const [nx, ny] of neighbors) {
-        // Check bounds
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-          const key = ny * width + nx
-          if (!visited.has(key)) {
-            visited.add(key)
-            queue.push([nx, ny])
-          }
-        }
+      if (x > 0) {
+        const np = p - 1
+        if (!visited[np]) { visited[np] = 1; queue[tail++] = np }
+      }
+      if (x < width - 1) {
+        const np = p + 1
+        if (!visited[np]) { visited[np] = 1; queue[tail++] = np }
+      }
+      if (y > 0) {
+        const np = p - width
+        if (!visited[np]) { visited[np] = 1; queue[tail++] = np }
+      }
+      if (y < height - 1) {
+        const np = p + width
+        if (!visited[np]) { visited[np] = 1; queue[tail++] = np }
       }
     }
   }
